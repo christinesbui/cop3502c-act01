@@ -1,0 +1,254 @@
+// 02/14/2021
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <strings.h>
+#include <math.h>
+#include "sp21_cop3502_as1.h"
+#include "leak_detector_c.h"
+
+// code that professor provided for us
+int get_next_nonblank_line(FILE *ifp, char *buf, int max_length) {
+    buf[0] = '\0';
+    while(!feof(ifp) && (buf[0] == '\0'))
+    {
+        fgets(buf, max_length, ifp);
+        remove_crlf(buf);
+    }
+    if(buf[0] != '\0') {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+// another code that professor provided for us
+void remove_crlf(char *s) {
+    char *t = s + strlen(s);
+    t--;
+    while((t >= s) && (*t == '\n' || *t == '\r'))
+    {
+        *t = '\0';
+        t--;
+    }
+}
+
+// the total number of monsters from my input file
+int get_number_of_monsters(FILE *ifp) {
+    char buf[256];
+    int monsterNumber;
+    get_next_nonblank_line(ifp, buf, 255);
+    sscanf(buf, "%d monsters", &monsterNumber);
+    return monsterNumber;
+}
+
+// reads the monster information such as id, name, element, and population
+void read_monster(FILE *ifp, monster *m) {
+    char buf[256];
+    char namebuf[256];
+    char elementbuf[256];
+    int population;
+    get_next_nonblank_line(ifp, buf, 255);
+    // reads name, element, and monster population
+    sscanf(buf, "%s %s %d", namebuf, elementbuf, &population);
+    // monster pointer points to name, element, and population of the monsters
+    m->name = strdup(namebuf);
+    m->element = strdup(elementbuf);
+    m->population = population;
+}
+
+// the total number of regions from my input file
+int get_number_of_regions(FILE *ifp){
+    char buf[256];
+    int regionNumber;
+    get_next_nonblank_line(ifp, buf, 255);
+    sscanf(buf, "%d regions", &regionNumber);
+    return regionNumber;
+}
+
+// reads the region information such as name, number of monsters, monster types, and total population
+void read_region(FILE *ifp, region *r, monster *all_m, int totalmonsterNumber) {
+    char buf[256];
+    char namebuf[256];
+    char monsternamebuf[256];
+    int nmonsters;
+    // reads the name and number of monsters
+    get_next_nonblank_line(ifp, buf, 255);
+    sscanf(buf, "%s", namebuf);
+    get_next_nonblank_line(ifp, buf, 255);
+    sscanf(buf, "%d monsters", &nmonsters);
+    // r points to monsters to allocate memory for the double monster pointer
+    r->monsters = malloc(sizeof(monster*) * nmonsters);
+    for(int j, total_population = 0; j < nmonsters; j++) {
+        get_next_nonblank_line(ifp, buf, 255);
+        sscanf(buf, "%s", monsternamebuf);
+        for(int k = 0; k < totalmonsterNumber; k++) {
+            int result = strcmp(monsternamebuf, all_m[k].name);
+            if(result == 0) {
+                r->monsters[j] = &all_m[k];
+                // prints all the monsters in each region
+                //printf("%s\n", r->monsters[j]->name);
+                break;
+            }
+        }
+        int one_population = r->monsters[j]->population;
+        total_population += one_population;
+        r->total_population = total_population;
+    }
+    r->name = strdup(namebuf);
+    r->nmonsters = nmonsters;
+}
+
+// the trainers from my input file
+int get_number_of_trainers(FILE *ifp) {
+    char buf [256];
+    int trainerNumber;
+    get_next_nonblank_line(ifp, buf, 255);
+    sscanf(buf, "%d trainers", &trainerNumber);
+    return trainerNumber;
+}
+
+// reads the trainer information
+void read_trainer(FILE *ifp, trainer *t, itinerary *iti) {
+    char buf[256];
+    char namebuf[256];
+    get_next_nonblank_line(ifp, buf, 255);
+    sscanf(buf, "%s", namebuf);
+    t->name = strdup(namebuf);
+}
+
+// reads itinerary information such as captures and number of regions
+void read_itinerary(FILE *ifp, region *r, itinerary *iti, monster *m, int totalregionNumber) {
+    char buf[256];
+    char regionnamebuf[256];
+    int nregions;
+    int captures;
+    get_next_nonblank_line(ifp, buf, 255);
+    sscanf(buf, "%d captures", &captures);
+    get_next_nonblank_line(ifp, buf, 255);
+    sscanf(buf, "%d regions", &nregions);
+    // allocates memory to the double pointer of region
+    iti->regions = malloc(sizeof(region*) * nregions);
+    for(int j = 0; j < nregions; j++) {
+        get_next_nonblank_line(ifp, buf, 255);
+        sscanf(buf, "%s", regionnamebuf);
+        for(int k = 0; k < totalregionNumber; k++) {
+            int result = strcmp(regionnamebuf, r[k].name);
+            if(result == 0) {
+                iti->regions[j] = &r[k];
+                // prints the regions that each trainer went to
+                //printf("%s\n", iti->regions[j]->name);
+                break;
+            }
+        }
+    }
+    iti->nregions = nregions;
+    iti->captures = captures;
+}
+void trainer_to_itinerary(FILE *ifp, itinerary *iti, trainer *t, int trainerNumber)
+{
+    for(int i = 0; i < trainerNumber; i++) {
+        t[i].visits = &iti[i];
+    }
+}
+
+// includes calculations that will format everything to how the output file looks
+void print_output(FILE *ifp, FILE *output_file, itinerary *iti, trainer *t, region 
+*r, monster *m) {
+    int nregions_in_trainers_itinerary = t->visits->nregions;
+    // trainer name
+    fprintf(output_file, "%s\n", t->name);
+    for(int j = 0; j < nregions_in_trainers_itinerary; j++) {
+        int monsters_in_region = t->visits->regions[j]->nmonsters;
+        // region name
+        fprintf(output_file, "%s\n", t->visits->regions[j]->name);
+        for(int k = 0; k < monsters_in_region; k++) {
+            float monsterpopulation_in_each_region = t->visits->regions[j]->total_population;
+            float relative_monsterpopulation = t->visits->regions[j]->monsters[k]->population;
+            float division_relative_and_total = relative_monsterpopulation / monsterpopulation_in_each_region;
+            float trainer_captures = t->visits->captures;
+            float monster_captures_total = division_relative_and_total * trainer_captures;
+            if(round(monster_captures_total) != 0) {
+                // where the rounding comes in
+                fprintf(output_file, "%.0f ", round(monster_captures_total));
+                // the monster names from each region
+                fprintf(output_file, "%s\n", t->visits->regions[j]->monsters[k]->name);
+            }
+        }
+    }
+    fprintf(output_file, "\n");
+}
+
+int main()
+{
+    atexit(report_mem_leak);
+    FILE *input_file;
+    input_file = fopen("cop3502-as1-input.txt", "r");
+    FILE *output_file;
+    output_file = fopen("cop3502-as1-output-bui-christine.txt", "w");
+    monster *monsters;
+    region *regions;
+    trainer *trainers;
+    itinerary *itineraries;
+    
+    int totalmonsterNumber = get_number_of_monsters(input_file);
+    monsters = malloc(sizeof(monster) * totalmonsterNumber);
+    // tells us how many monsters there are from my input file
+    //printf("There are %d monsters.\n", totalmonsterNumber);
+    for(int i = 0; i < totalmonsterNumber; i++) {
+        read_monster(input_file, monsters + i);
+        // prints the monster information
+        //printf("Monster name: %s\n", monsters[i].name);
+        //printf("Element type: %s\n", monsters[i].element);
+        //printf("Population: %d\n\n", monsters[i].population);
+    }
+    int totalregionNumber = get_number_of_regions(input_file);
+    regions = malloc(sizeof(region) * totalregionNumber);
+    // tells us how many regions there are from my input file
+    //printf("There are %d regions.\n", totalregionNumber);
+    for(int i = 0; i < totalregionNumber; i++) {
+        read_region(input_file, regions + i, monsters, totalmonsterNumber);
+        // prints the region information
+        //printf("%d monsters\n", regions[i].nmonsters);
+        //printf("Name of region: %s\n", regions[i].name);
+        //printf("Total population: %d monsters\n\n", regions[i].total_population);
+    }
+    int totaltrainerNumber = get_number_of_trainers(input_file);
+    trainers = malloc(sizeof(trainer) * totaltrainerNumber);
+    itineraries = malloc(sizeof(itinerary) * totaltrainerNumber);
+    for(int i = 0; i < totaltrainerNumber; i++) {
+        read_trainer(input_file, trainers + i, itineraries);
+        read_itinerary(input_file, regions, itineraries + i, monsters, totalregionNumber);
+        // prints the trainer and itinerary information
+        //printf("Trainer name: %s\n", trainers[i].name);
+        //printf("%d captures\n", itineraries[i].captures);
+        //printf("%d regions\n\n", itineraries[i].nregions);
+    }
+    trainer_to_itinerary(input_file, itineraries, trainers, totaltrainerNumber);
+    printf("\n");
+        for(int i = 0; i < totaltrainerNumber; i++) {
+            print_output(input_file, output_file, itineraries, trainers + i, regions, monsters);
+        }
+    /*for(int i = 0; i < totalmonsterNumber; i++) {
+        free(monsters + i);
+    }
+    for(int i = 0; i < totalregionNumber; i++) {
+        free(itineraries->regions);
+        free(regions + i);
+        free(regions->monsters);
+    }
+    for(int i = 0; i < totaltrainerNumber; i++) {
+        free(trainers->visits);
+        free(trainers + i);
+        free(itineraries + i);
+    }*/
+    
+    // where i free all the structs
+    free(monsters);
+    free(regions);
+    free(trainers);
+    free(itineraries);
+    fclose(input_file);
+    fclose(output_file);
+    return 0;
+}
